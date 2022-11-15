@@ -3,6 +3,8 @@ module google_oauth_spreadsheet-golang-example
 go 1.17
 
 require (
+	github.com/joho/godotenv v1.4.0
+	github.com/kelseyhightower/envconfig v1.4.0
 	golang.org/x/oauth2 v0.2.0
 	google.golang.org/api v0.103.0
 )

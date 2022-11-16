@@ -24,8 +24,14 @@ import (
 //     https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/get#examples
 
 type Config struct {
-	Scopes              []string `envconfig:"SCOPES" required:"true" default:"https://www.googleapis.com/auth/drive.readonly"`
-	CredentialsFileName string   `envconfig:"CREDENTIALS_FILE_NAME" required:"true" default:"credentials.json"`
+	BatchCount          int    `envconfig:"BATCH_COUNT" required:"true" default:"1000"`
+	CredentialsFileName string `envconfig:"CREDENTIALS_FILE_NAME" required:"true" default:"credentials.json"`
+	// The `SpreadsheetId`/`SheetName` defaults are for a Google Sheets API sample
+	// spreadsheet:
+	//  - https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
+	SpreadsheetId string   `envconfig:"SPREADSHEET_ID" required:"true" default:"1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"`
+	SheetName     string   `envconfig:"SHEET_NAME" required:"true" default:"Class Data"`
+	Scopes        []string `envconfig:"SCOPES" required:"true" default:"https://www.googleapis.com/auth/drive.readonly"`
 }
 
 type Project struct {
@@ -68,7 +74,7 @@ func main() {
 
 	fmt.Println("\nThe following scopes will be used:")
 	for _, scope := range project.config.Scopes {
-		fmt.Println("• " + scope)
+		fmt.Println("\t• " + scope)
 	}
 	fmt.Println()
 	// NOTE: if you modify the scopes, delete your previously saved `token.json`
@@ -95,9 +101,9 @@ func main() {
 // NOTE: the returned row count doesn't account for blank rows; when looping
 // through the spreadsheets rows, watch for `len(resp.Values) == 0` to know when
 // you're working with a blank row.
-func (p Project) getSpreadsheetSheetRowCount(spreadsheetId string, sheetTitle string) (int, error) {
+func (p Project) getSpreadsheetSheetRowCount() (int, error) {
 	rowCount := 0
-	resp, err := p.sheetsService.Spreadsheets.Get(spreadsheetId).Do()
+	resp, err := p.sheetsService.Spreadsheets.Get(p.config.SpreadsheetId).Do()
 	if err != nil {
 		return 0, err
 	}
@@ -105,7 +111,7 @@ func (p Project) getSpreadsheetSheetRowCount(spreadsheetId string, sheetTitle st
 	// `rowCount` if found
 	sheetFound := false
 	for _, sheet := range resp.Sheets {
-		if sheet.Properties.Title == sheetTitle {
+		if sheet.Properties.Title == p.config.SheetName {
 			sheetFound = true
 			rowCount = int(sheet.Properties.GridProperties.RowCount)
 			break
@@ -121,9 +127,8 @@ func (p Project) getSpreadsheetSheetRowCount(spreadsheetId string, sheetTitle st
 // Google Sheets API sample spreadsheet:
 //  - https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
 func (p Project) printFromSampleSpreadsheet() {
-	spreadsheetId := "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
-	readRange := "Class Data!A2:E"
-	resp, err := p.sheetsService.Spreadsheets.Values.Get(spreadsheetId, readRange).Do()
+	readRange := "Class Data!A2:Z"
+	resp, err := p.sheetsService.Spreadsheets.Values.Get("1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms", readRange).Do()
 	if err != nil {
 		log.Fatalf("Unable to retrieve data from sheet: %v", err)
 	}
@@ -155,47 +160,51 @@ type ExampleStudent struct {
 
 // parseFromSampleSpreadsheet shows how to parse records from a sample
 // spreadsheet, using the header (first row) as the keys to map to the
-// `ExampleStudent` struct.
-//
-// Sample Spreadsheet:
-// https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
+// `ExampleStudent` struct (if found), as well as in a JSON object for when the
+// structure isn't known ahead of time.
 func (p Project) parseFromSampleSpreadsheet() {
-	spreadsheetId := "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
-	sheetTitle := "Class Data"
-	rowCount, err := p.getSpreadsheetSheetRowCount(spreadsheetId, sheetTitle)
+	rowCount, err := p.getSpreadsheetSheetRowCount()
 	if err != nil {
 		if errors.Is(err, errSheetNotFound) {
-			log.Fatalf("Sheet '%s' not found", sheetTitle)
+			log.Fatalf("Sheet '%s' not found", p.config.SheetName)
 		}
 		log.Fatalf("Unable to retrieve sheet row count: %v", err)
 	}
 	sheetHeaders := []interface{}{}
-	batchCount := 1000 // TODO: move to ENV variable, default to 1000. (topher)
+	fmt.Printf("spreadsheetId: %s\n", p.config.SpreadsheetId)
+	fmt.Printf("sheetName: %s\n", p.config.SheetName)
+	fmt.Printf("rowCount: %d\n", rowCount)
 	// Loop through all the rows in batches of `batchCount`
-	fmt.Printf("\nrowCount: %d\n\n", rowCount)
-	for i, j := 1, batchCount; i <= rowCount; i, j = i+batchCount, j+batchCount {
+	for i, j := 1, project.config.BatchCount; i <= rowCount; i, j = i+project.config.BatchCount, j+project.config.BatchCount {
 		if j >= rowCount {
 			j = rowCount
 		}
 		fmt.Printf("\nfor loop for rows %d-%d\n", i, j)
 		// Example result: "'Sheet Name'!A1:Z10"
-		readRange := fmt.Sprintf("'%s'!A%d:E%d", sheetTitle, i, j)
-		resp, err := p.sheetsService.Spreadsheets.Values.Get(spreadsheetId, readRange).Do()
+		readRange := fmt.Sprintf("'%s'!A%d:Z%d", p.config.SheetName, i, j)
+		resp, err := p.sheetsService.Spreadsheets.Values.Get(p.config.SpreadsheetId, readRange).Do()
 		if err != nil {
 			log.Fatalf("Unable to retrieve data from sheet: %v", err)
 		}
 
 		// NOTE: this doesn't necessarily mean the end of the sheet has been
 		// reached; it's possible there's some blank rows spread throughout the
-		//// if len(resp.Values) == 0 {
-		//// 	fmt.Println("No data found.")
-		//// 	break
-		//// }
+		// values (as well as blank rows in-between valid rows that also needs to
+		// be caught down below while looping through `resp.Values`).
+		if len(resp.Values) == 0 {
+			fmt.Println("No data found.")
+		}
 		//
-		// Empty rows are removed from Values, only loop through them if rows found:
-		// TODO: update Spreadsheet to confirm this. (topher)
+		// Empty rows are removed from Values (if the full batch is empty rows),
+		// only loop through them if rows found:
 		if len(resp.Values) > 0 {
 			for ii, row := range resp.Values {
+				// there might be a blank row in-between valid rows, skip to next row if
+				// this is blank:
+				if len(row) == 0 {
+					fmt.Println("Blank row found.")
+					continue
+				}
 				// if this is the first API call, get and print the headers
 				if ii == 0 && i == 1 {
 					sheetHeaders = row
@@ -207,10 +216,51 @@ func (p Project) parseFromSampleSpreadsheet() {
 					// NOTE: parsing to a struct is only possible when we know the
 					// Spreadsheet structure ahead of time; this wouldn't work if the
 					// `spreadsheetId`/`sheetTitle` were provided externally.
+					student := ExampleStudent{}
+					// Parse row as JSON object:
 					//
-					// TODO: parse each row as an `ExampleStudent`. (topher)
-					fmt.Printf("sheetHeaders: #%v\n", sheetHeaders)
-					fmt.Printf("row values: #%v\n", row)
+					// Parsing as a JSON works great if we don't know the Spreadsheet
+					// structure/headers ahead of time, by using the header strings as the
+					// keys.
+					json := map[string]interface{}{}
+					for iii, k := range sheetHeaders {
+						// convert key to string:
+						var keyString string
+						switch key := k.(type) {
+						case string:
+							keyString = key
+						}
+						var valueString string
+						switch value := row[iii].(type) {
+						case string:
+							valueString = value
+						}
+						if keyString != "" && valueString != "" {
+							json[keyString] = valueString
+						}
+						// match the key in order to set the Struct values:
+						switch keyString {
+						case "Student Name":
+							student.StudentName = valueString
+						case "Gender":
+							student.Gender = valueString
+						case "Class Level":
+							student.ClassLevel = valueString
+						case "Home State":
+							student.HomeState = valueString
+						case "Major":
+							student.Major = valueString
+						case "Extracurricular Activity":
+							student.ExtracurricularActivity = valueString
+						}
+					}
+					// If the spreadsheet used matches the format of the Google Sheets API
+					// sample spreadsheet, print it:
+					if student != (ExampleStudent{}) {
+						fmt.Printf("ExampleStudent struct:\t%#v\n", student)
+					} else {
+						fmt.Printf("\t\t json:\t%#v\n\n", json)
+					}
 				}
 			}
 		}

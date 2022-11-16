@@ -9,7 +9,24 @@ making a Sheets API request.
 
 ## Setup the project
 
-1. Clone code, and copy `.env-sample` to `.env.local` and update the ENV values
+1. Clone code and setup local files:
+
+   - Copy `.env-sample` to `.env` and update the ENV values
+   - Download your `credentials.json` file from the Google Developers Console:
+
+     - Go to https://console.developers.google.com
+     - Go to **Credentials**
+     - Download the application (OAuth client) JSON file
+     - Save it as `credentials.json` _(or update `CREDENTIALS_FILE_NAME` ENV to_
+       _match)_ to the project root
+
+       - The following information will be pulled from `credentials.json`:
+
+         - `client_id`
+         - `client_secret`
+         - `redirect_uris`
+
+           _(if you have more than one, the project defaults to the first `uri`.)_
 
 2. Install modules:
 
@@ -32,8 +49,19 @@ making a Sheets API request.
 
 3. Start the project:
 
-   TODO:
-
    - ```sh
-     TODO:
+     go run main.go
      ```
+
+   - Go to `http://localhost:8000` in your browser
+
+   - On your first run, you'll be prompted to authorize access:
+
+     - You'll be prompted to sign in or select the account to use for
+       authorization
+     - Click `Accept`
+     - Copy the code from the browser,\
+       Paste it into the command-line prompt,\
+       and press `Enter`.
+     - Authorization info is stored in the file system,\
+       the won't be prompted for authorization on the next run.

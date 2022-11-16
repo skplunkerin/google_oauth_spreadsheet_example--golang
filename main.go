@@ -17,11 +17,10 @@ import (
 	"google.golang.org/api/sheets/v4"
 )
 
-// Code pulled from the following two examples:
+// Code originally pulled from the following, and then modified for my own
+// demonstration:
 //   - Google Sheets API - Golang Quickstart:
 //     https://developers.google.com/sheets/api/quickstart/go#step_3_set_up_the_sample
-//   - Google Sheets API - Get spreadsheet values example:
-//     https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/get#examples
 
 type Config struct {
 	BatchCount          int    `envconfig:"BATCH_COUNT" required:"true" default:"1000"`
